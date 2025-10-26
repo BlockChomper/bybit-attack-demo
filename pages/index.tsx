@@ -24,6 +24,7 @@ export default function Home() {
   const [beforeExploit, setBeforeExploit] = useState<string>('')
   const [afterExploit, setAfterExploit] = useState<string>('')
   const [hasMetaMask, setHasMetaMask] = useState(false)
+  const [exploitLogs, setExploitLogs] = useState<string[]>([])
 
   useEffect(() => {
     // Check if we're in the browser
@@ -249,6 +250,12 @@ export default function Home() {
     setStatus('✓ Manual addresses loaded!')
   }
 
+  const addLog = (message: string) => {
+    console.log(message)
+    setExploitLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`])
+    setStatus(message)
+  }
+
   const demonstrateExploit = async () => {
     if (!addresses.safeProxy || !addresses.maliciousContract) {
       setStatus('Please load contract addresses first')
@@ -260,11 +267,15 @@ export default function Home() {
       return
     }
 
+    // Clear previous logs
+    setExploitLogs([])
+
     try {
-      setStatus('🔍 Step 1: Checking current implementation...')
+      addLog('🔍 Step 1: Starting exploit...')
       
       // Import ethers dynamically to avoid SSR issues
       const { ethers } = await import('ethers')
+      addLog('📦 ethers.js loaded')
       
       if (!window.ethereum) {
         setStatus('MetaMask not available')
@@ -273,81 +284,73 @@ export default function Home() {
 
       const provider = new ethers.BrowserProvider(window.ethereum)
       const signer = await provider.getSigner()
+      addLog('✅ Connected to wallet')
       
       // Import ABIs
       const { SafeProxyABI, MaliciousContractABI } = await import('../contracts/ABI')
+      addLog('📄 ABIs loaded')
       
       // Step 1: Check implementation BEFORE
+      addLog(`📊 Reading original proxy implementation...`)
       const safeProxy = new ethers.Contract(addresses.safeProxy, SafeProxyABI, signer)
       const implBefore = await safeProxy.getImplementation()
       
+      addLog(`📍 Original Safe Proxy implementation: ${implBefore}`)
       setBeforeExploit(implBefore)
-      setStatus(`📊 Current Implementation: ${implBefore}`)
       
-      // Step 2: First, change the proxy's implementation to malicious contract
-      setStatus('⚠️ WARNING: Changing proxy implementation to MaliciousContract...')
-      setStatus('⚠️ This is the exploitation step!')
-      
-      // We need to directly write to the proxy's storage slot 0
-      // Since we control the proxy, we can do this by changing implementation
-      // But SafeProxy doesn't have a setImplementation function...
-      
-      // So the REAL exploit: Deploy proxy with MaliciousContract as implementation
-      setStatus('💡 REAL ATTACK: Create a proxy that delegates to MaliciousContract')
-      
-      const malicious = new ethers.Contract(addresses.maliciousContract, MaliciousContractABI, signer)
-      
-      // Deploy a NEW proxy with malicious contract as implementation
-      setStatus('📦 Deploying new proxy with MaliciousContract as implementation...')
+      // Step 2: Deploy proxy with MaliciousContract as implementation
+      addLog('🎯 Step 2: Deploying proxy with MaliciousContract as implementation')
       
       const proxyArtifact = await fetch('/api/artifacts/SafeProxy')
       const { abi: proxyAbi, bytecode: proxyBytecode } = await proxyArtifact.json()
       const ProxyFactory = new ethers.ContractFactory(proxyAbi, proxyBytecode, signer)
       
+      addLog(`📦 Deploying SafeProxy with MaliciousContract as impl...`)
       const attackedProxy = await ProxyFactory.deploy(addresses.maliciousContract)
       await attackedProxy.waitForDeployment()
       const attackedProxyAddress = await attackedProxy.getAddress()
       
-      setStatus(`✅ Deployed attacked proxy: ${attackedProxyAddress}`)
-      setStatus(`📊 This proxy points to MaliciousContract`)
+      addLog(`✅ Proxy deployed: ${attackedProxyAddress}`)
+      addLog(`📊 Proxy now points to: ${addresses.maliciousContract}`)
       
-      // Step 3: Now call transfer() on this proxy
-      setStatus('🎯 Calling transfer() on proxy with MaliciousContract implementation...')
+      // Step 3: Call transfer() which will trigger the exploit
+      addLog('🎯 Step 3: Calling transfer() on proxy (this triggers delegatecall to MaliciousContract)')
+      addLog(`📍 Calling: transfer(${account}, 0)`)
       
-      // Call transfer on the proxy - it will delegatecall to malicious contract
-      const transferSelector = "0xa9059cbb" // transfer(address,uint256)
       const iface = new ethers.Interface(MaliciousContractABI)
       const data = iface.encodeFunctionData("transfer", [account, 0])
       
+      addLog(`📤 Sending transaction...`)
       const tx = await signer.sendTransaction({
         to: attackedProxyAddress,
         data: data,
         gasLimit: 200000
       })
       
-      setStatus('⏳ Waiting for transaction...')
+      addLog(`⏳ Transaction hash: ${tx.hash}`)
+      addLog(`⏳ Waiting for confirmation...`)
       await tx.wait()
       
-      setStatus('✅ Transaction confirmed!')
+      addLog('✅ Transaction confirmed!')
+      addLog(`📊 Transfer() wrote ${account} to slot 0 of the proxy`)
       
-      // Step 4: Check implementation AFTER
-      setStatus('🔍 Checking implementation after calling transfer()...')
+      // Step 4: Verify the exploit worked
+      addLog('🔍 Step 4: Verifying exploit - checking implementation address...')
       
       const attackedProxyContract = new ethers.Contract(attackedProxyAddress, SafeProxyABI, signer)
       const implAfter = await attackedProxyContract.getImplementation()
       setAfterExploit(implAfter)
       
-      setStatus(`📊 Implementation BEFORE transfer(): ${addresses.maliciousContract}`)
-      setStatus(`📊 Implementation AFTER transfer():  ${implAfter}`)
+      addLog(`📍 BEFORE transfer(): ${addresses.maliciousContract}`)
+      addLog(`📍 AFTER transfer():  ${implAfter}`)
       
       if (addresses.maliciousContract.toLowerCase() !== implAfter.toLowerCase()) {
-        setStatus(`✅✅✅ EXPLOIT SUCCESSFUL!`)
-        setStatus(`📍 The proxy's implementation address changed!`)
-        setStatus(`BEFORE: ${addresses.maliciousContract}`)
-        setStatus(`AFTER:  ${implAfter}`)
-        setStatus(`📝 This proves storage slot 0 was overwritten!`)
+        addLog(`✅✅✅ EXPLOIT SUCCESSFUL!`)
+        addLog(`📍 Implementation address changed from MaliciousContract to ${implAfter}`)
+        addLog(`📝 This proves: Storage slot 0 (implementation) was overwritten!`)
+        addLog(`📝 MaliciousContract's _transfer write affected the proxy's storage!`)
       } else {
-        setStatus(`⚠️ Implementation unchanged. This might be expected if the write didn't succeed.`)
+        addLog(`⚠️ Implementation unchanged. The write to slot 0 didn't change the address.`)
       }
       
     } catch (error: any) {
@@ -566,13 +569,45 @@ export default function Home() {
         {/* Exploit Demonstration */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-purple-600">
           <h2 className="text-2xl font-semibold mb-4 text-purple-400">Exploit Demonstration</h2>
-          <button
-            onClick={demonstrateExploit}
-            disabled={!addresses.safeProxy || !addresses.maliciousContract}
-            className="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Execute Exploit
-          </button>
+          
+          <div className="mb-4">
+            <button
+              onClick={demonstrateExploit}
+              disabled={!addresses.safeProxy || !addresses.maliciousContract}
+              className="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Execute Exploit
+            </button>
+          </div>
+
+          {exploitLogs.length > 0 && (
+            <div className="mt-4 bg-black rounded p-4 border border-gray-700">
+              <h3 className="text-lg font-semibold mb-3 text-green-400">📋 Execution Logs</h3>
+              <div className="max-h-96 overflow-y-auto">
+                {exploitLogs.map((log, index) => (
+                  <div key={index} className="text-sm text-gray-300 mb-1 font-mono">
+                    {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {beforeExploit && (
+            <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded">
+              <p className="text-sm text-yellow-400">
+                <strong>Before:</strong> {beforeExploit}
+              </p>
+            </div>
+          )}
+          
+          {afterExploit && (
+            <div className="mt-4 p-3 bg-red-900/20 border border-red-700 rounded">
+              <p className="text-sm text-red-400">
+                <strong>After:</strong> {afterExploit}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Status */}
