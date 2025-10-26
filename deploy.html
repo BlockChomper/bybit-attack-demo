@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deploy Contracts - Bybit Attack Demo</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(to bottom, #1f1f1f, #000000);
+            color: #e0e0e0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #a78bfa;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        .section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .section h2 {
+            color: #4ade80;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        input {
+            width: 100%;
+            padding: 10px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: #e0e0e0;
+            margin: 5px 0;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .address {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .status {
+            background: #1e3a5f;
+            border: 1px solid #3b82f6;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        
+        .error {
+            background: #5f1e1e;
+            border: 1px solid #ef4444;
+        }
+        
+        .success {
+            background: #1e5f3a;
+            border: 1px solid #10b981;
+        }
+        
+        .warning {
+            background: #5f4e1e;
+            border: 1px solid #f59e0b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📦 Deploy Contracts to Sepolia</h1>
+        
+        <div class="section">
+            <h2>🔗 Connect Wallet</h2>
+            <div id="account-info"></div>
+            <button id="connect-btn" onclick="connectWallet()">Connect MetaMask</button>
+            <button id="sepolia-btn" onclick="switchToSepolia()" style="background: #f59e0b;">Switch to Sepolia</button>
+        </div>
+        
+        <div class="section">
+            <h2>💰 Your Balance</h2>
+            <div id="balance">Not connected</div>
+        </div>
+        
+        <div class="section">
+            <h2>🛠️ Deploy Safe Implementation</h2>
+            <button id="deploy-safe-impl" onclick="deploySafeImplementation()" disabled>Deploy Safe Implementation</button>
+            <div id="safe-impl-address" class="address" style="display:none;"></div>
+        </div>
+        
+        <div class="section">
+            <h2>🔴 Deploy Malicious Contract</h2>
+            <button id="deploy-malicious" onclick="deployMaliciousContract()" disabled>Deploy Malicious Contract</button>
+            <div id="malicious-address" class="address" style="display:none;"></div>
+        </div>
+        
+        <div class="section">
+            <h2>🔄 Deploy Safe Proxy</h2>
+            <button id="deploy-proxy" onclick="deploySafeProxy()" disabled>Deploy Safe Proxy</button>
+            <div id="safe-proxy-address" class="address" style="display:none;"></div>
+        </div>
+        
+        <div class="section">
+            <h2>📊 Status</h2>
+            <div id="status">Ready to deploy</div>
+        </div>
+        
+        <div class="section">
+            <h2>📋 All Deployed Addresses</h2>
+            <div id="all-addresses"></div>
+        </div>
+    </div>
+
+    <script>
+        let provider, signer, account;
+        
+        // Contract bytecode - these need to be filled from compiled artifacts
+        const SafeImplementationBytecode = '0x'; // Add compiled bytecode here
+        const MaliciousContractBytecode = '0x'; // Add compiled bytecode here
+        const SafeProxyBytecode = '0x'; // Add compiled bytecode here
+        
+        async function connectWallet() {
+            if (typeof window.ethereum === 'undefined') {
+                alert('MetaMask is not installed!');
+                return;
+            }
+            
+            try {
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                signer = provider.getSigner();
+                account = await signer.getAddress();
+                
+                document.getElementById('account-info').innerHTML = `✓ Connected: ${account}`;
+                document.getElementById('connect-btn').disabled = true;
+                document.getElementById('deploy-safe-impl').disabled = false;
+                document.getElementById('deploy-malicious').disabled = false;
+                document.getElementById('deploy-proxy').disabled = false;
+                
+                updateBalance();
+                setStatus('✓ Wallet connected!', 'success');
+            } catch (error) {
+                setStatus('Error connecting: ' + error.message, 'error');
+            }
+        }
+        
+        async function switchToSepolia() {
+            try {
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: '0xaa36a7' }],
+                });
+                setStatus('✓ Switched to Sepolia', 'success');
+            } catch (switchError) {
+                if (switchError.code === 4902) {
+                    await window.ethereum.request({
+                        method: 'wallet_addEthereumChain',
+                        params: [{
+                            chainId: '0xaa36a7',
+                            chainName: 'Sepolia',
+                            nativeCurrency: {
+                                name: 'SepoliaETH',
+                                symbol: 'ETH',
+                                decimals: 18,
+                            },
+                            rpcUrls: ['https://sepolia.infura.io/v3/'],
+                            blockExplorerUrls: ['https://sepolia.etherscan.io'],
+                        }],
+                    });
+                }
+            }
+        }
+        
+        async function updateBalance() {
+            if (!provider) return;
+            
+            const balance = await provider.getBalance(account);
+            const ethBalance = ethers.utils.formatEther(balance);
+            document.getElementById('balance').textContent = `Balance: ${parseFloat(ethBalance).toFixed(4)} ETH`;
+        }
+        
+        async function deploySafeImplementation() {
+            if (!SafeImplementationBytecode || SafeImplementationBytecode === '0x') {
+                setStatus('⚠️ Bytecode not loaded. Please compile contracts first.', 'warning');
+                alert('To deploy from UI:\n\n1. Run: npm run compile\n2. Get bytecode from artifacts/contracts/*.sol/*.json\n3. Update deploy.html with bytecode');
+                return;
+            }
+            
+            setStatus('Deploying Safe Implementation...', 'warning');
+            
+            // Note: You need to load the actual factory from Hardhat
+            setStatus('Deployment requires Hardhat. Please use: npm run deploy:sepolia', 'warning');
+        }
+        
+        async function deployMaliciousContract() {
+            setStatus('Deployment requires Hardhat. Please use: npm run deploy:sepolia', 'warning');
+        }
+        
+        async function deploySafeProxy() {
+            setStatus('Deployment requires Hardhat. Please use: npm run deploy:sepolia', 'warning');
+        }
+        
+        function setStatus(message, type = '') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+        }
+        
+        // Check if MetaMask is installed
+        if (typeof window.ethereum === 'undefined') {
+            setStatus('⚠️ MetaMask not detected. Please install MetaMask extension.', 'error');
+        }
+    </script>
+</body>
+</html>
+
