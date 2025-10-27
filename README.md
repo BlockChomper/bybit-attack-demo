@@ -221,6 +221,51 @@ npx hardhat verify --network sepolia <CONTRACT_ADDRESS>
 
 ---
 
+## Deploying to Base
+
+### Base Mainnet Configuration
+
+1. Edit your `.env` file and add Base configuration:
+   ```bash
+   BASE_RPC_URL=https://mainnet.base.org
+   BASESCAN_API_KEY=your_basescan_api_key
+   ```
+
+2. **Get Base ETH:** 
+   - Bridge ETH from Ethereum Mainnet via [base.org/bridge](https://bridge.base.org/)
+   - Or use [Base faucet](https://www.coinbase.com/faucets/base-ethereum-goerli-faucet) for testnet
+
+3. **Deploy to Base Mainnet:**
+   ```bash
+   npm run deploy:base
+   ```
+
+4. **Verify on Basescan:**
+   ```bash
+   npx hardhat verify --network base <CONTRACT_ADDRESS>
+   ```
+
+### Base Sepolia Testnet (Recommended for testing)
+
+1. Edit your `.env` file:
+   ```bash
+   BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
+   BASESCAN_API_KEY=your_basescan_api_key
+   ```
+
+2. **Get Base Sepolia ETH:**
+   - Visit [Base faucet](https://www.coinbase.com/faucets/base-ethereum-goerli-faucet)
+
+3. **Deploy to Base Sepolia:**
+   ```bash
+   npm run deploy:basesepolia
+   ```
+
+4. **View on Basescan:**
+   - https://sepolia.basescan.org
+
+---
+
 ## Using the Web Interface
 
 The web interface provides a user-friendly way to interact with the demo.

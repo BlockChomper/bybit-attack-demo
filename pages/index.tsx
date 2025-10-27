@@ -25,6 +25,7 @@ export default function Home() {
   const [afterExploit, setAfterExploit] = useState<string>('')
   const [hasMetaMask, setHasMetaMask] = useState(false)
   const [exploitLogs, setExploitLogs] = useState<string[]>([])
+  const [networkName, setNetworkName] = useState<string>('unknown')
 
   useEffect(() => {
     // Check if we're in the browser
@@ -97,36 +98,92 @@ export default function Home() {
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0xaa36a7' }],
+        params: [{ chainId: '0xaa36a7' }], // Sepolia
       })
       setStatus('✓ Switched to Sepolia network')
     } catch (switchError: any) {
       if (switchError.code === 4902) {
-        // Chain not added, let's add it
         try {
           await window.ethereum.request({
             method: 'wallet_addEthereumChain',
-            params: [
-              {
-                chainId: '0xaa36a7',
-                chainName: 'Sepolia',
-                nativeCurrency: {
-                  name: 'SepoliaETH',
-                  symbol: 'ETH',
-                  decimals: 18,
-                },
-                rpcUrls: ['https://sepolia.infura.io/v3/'],
-                blockExplorerUrls: ['https://sepolia.etherscan.io'],
-              },
-            ],
+            params: [{
+              chainId: '0xaa36a7',
+              chainName: 'Sepolia',
+              nativeCurrency: { name: 'SepoliaETH', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://sepolia.infura.io/v3/'],
+              blockExplorerUrls: ['https://sepolia.etherscan.io'],
+            }],
           })
           setStatus('✓ Added and switched to Sepolia')
         } catch (addError) {
-          console.error('Error adding network:', addError)
           setStatus('❌ Error adding Sepolia network')
         }
       } else {
-        setStatus(`❌ Error switching network: ${switchError.message}`)
+        setStatus(`❌ Error: ${switchError.message}`)
+      }
+    }
+  }
+
+  const switchToBase = async () => {
+    if (!window.ethereum) return
+    
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x2105' }], // Base Mainnet
+      })
+      setStatus('✓ Switched to Base Mainnet')
+    } catch (switchError: any) {
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0x2105',
+              chainName: 'Base',
+              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://mainnet.base.org'],
+              blockExplorerUrls: ['https://basescan.org'],
+            }],
+          })
+          setStatus('✓ Added and switched to Base')
+        } catch (addError) {
+          setStatus('❌ Error adding Base network')
+        }
+      } else {
+        setStatus(`❌ Error: ${switchError.message}`)
+      }
+    }
+  }
+
+  const switchToBaseSepolia = async () => {
+    if (!window.ethereum) return
+    
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x14a33' }], // Base Sepolia
+      })
+      setStatus('✓ Switched to Base Sepolia')
+    } catch (switchError: any) {
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0x14a33',
+              chainName: 'Base Sepolia',
+              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://sepolia.base.org'],
+              blockExplorerUrls: ['https://sepolia.basescan.org'],
+            }],
+          })
+          setStatus('✓ Added and switched to Base Sepolia')
+        } catch (addError) {
+          setStatus('❌ Error adding Base Sepolia network')
+        }
+      } else {
+        setStatus(`❌ Error: ${switchError.message}`)
       }
     }
   }
@@ -254,6 +311,14 @@ export default function Home() {
     console.log(message)
     setExploitLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`])
     setStatus(message)
+  }
+
+  const getExplorerUrl = (address: string) => {
+    const network = networkName.toLowerCase()
+    if (network.includes('base sepolia')) return `https://sepolia.basescan.org/address/${address}`
+    if (network.includes('base')) return `https://basescan.org/address/${address}`
+    if (network.includes('sepolia')) return `https://sepolia.etherscan.io/address/${address}`
+    return `https://etherscan.io/address/${address}`
   }
 
   const demonstrateExploit = async () => {
@@ -411,12 +476,26 @@ export default function Home() {
               <div className="bg-green-900/30 border border-green-700 rounded p-4">
                 <p className="text-green-400 font-semibold">✓ Connected: {account}</p>
               </div>
+              <div className="flex flex-wrap gap-2">
               <button
-                onClick={switchToSepolia}
+                onClick={async () => { await switchToSepolia(); setNetworkName('Sepolia'); }}
                 className="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded text-sm font-semibold"
               >
-                Switch to Sepolia Network
+                Switch to Sepolia
               </button>
+              <button
+                onClick={async () => { await switchToBase(); setNetworkName('Base'); }}
+                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-semibold"
+              >
+                Switch to Base
+              </button>
+              <button
+                onClick={async () => { await switchToBaseSepolia(); setNetworkName('Base Sepolia'); }}
+                className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm font-semibold"
+              >
+                Switch to Base Sepolia
+              </button>
+              </div>
             </div>
           )}
         </div>
@@ -498,12 +577,12 @@ export default function Home() {
                     {addresses.safeImplementation}
                   </p>
                   <a 
-                    href={`https://sepolia.etherscan.io/address/${addresses.safeImplementation}`}
+                    href={getExplorerUrl(addresses.safeImplementation)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-400 hover:text-blue-300 text-sm"
                   >
-                    View on Etherscan ↗
+                    View on Explorer ↗
                   </a>
                 </div>
               )}
@@ -524,12 +603,12 @@ export default function Home() {
                     {addresses.maliciousContract}
                   </p>
                   <a 
-                    href={`https://sepolia.etherscan.io/address/${addresses.maliciousContract}`}
+                    href={getExplorerUrl(addresses.maliciousContract)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-400 hover:text-blue-300 text-sm"
                   >
-                    View on Etherscan ↗
+                    View on Explorer ↗
                   </a>
                 </div>
               )}
@@ -553,12 +632,12 @@ export default function Home() {
                     {addresses.safeProxy}
                   </p>
                   <a 
-                    href={`https://sepolia.etherscan.io/address/${addresses.safeProxy}`}
+                    href={getExplorerUrl(addresses.safeProxy)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-400 hover:text-blue-300 text-sm"
                   >
-                    View on Etherscan ↗
+                    View on Explorer ↗
                   </a>
                 </div>
               )}

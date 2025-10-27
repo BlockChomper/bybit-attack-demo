@@ -10,7 +10,10 @@
     "compile": "hardhat compile",
     "deploy": "hardhat run scripts/deploy.ts --network localhost",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
-    "verify": "hardhat verify --network sepolia"
+    "deploy:base": "hardhat run scripts/deploy.ts --network base",
+    "deploy:basesepolia": "hardhat run scripts/deploy.ts --network baseSepolia",
+    "verify": "hardhat verify --network sepolia",
+    "verify:base": "hardhat verify --network base"
   },
   "dependencies": {
     "next": "14.0.4",
